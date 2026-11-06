@@ -1,4 +1,4 @@
-﻿// Every tunable in one place; the debug panel edits these live.
+// Every tunable in one place; the debug panel edits these live.
 
 export interface Params {
   c: number; // wave speed, cells per sim step
@@ -27,7 +27,7 @@ export const DEFAULTS: Params = {
   fieldGain: 0.35,
   threshold: 0.2,
   cooldown: 0.4,
-  stalkCount: 3200,
+  stalkCount: 2600,
   gustInterval: 32,
   gustStrength: 1,
   breeze: 0.05,
@@ -41,5 +41,6 @@ export const DEFAULTS: Params = {
 };
 
 export const SIM_HZ = 120;
-export const GRID_W = 160;
-export const GRID_H = 60;
+// The field is a square patch of ground (seen as a diamond), so its grid is square too.
+export const GRID_W = 110;
+export const GRID_H = 110;

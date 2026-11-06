@@ -4,7 +4,7 @@
 import { Stalks } from "./stalks.ts";
 import { mulberry32, subSeed } from "./rng.ts";
 
-export const SUN_X = 0.63;
+export const SUN_X = 0.72;
 const SLICES = 30;
 const LIGHTS = 3; // full rim light, some, none
 const TRAIL_LIFE = 2.6;
@@ -30,7 +30,6 @@ export class Renderer {
   W = 0;
   H = 0;
   dpr = 1;
-  horizon = 0;
   private bg: HTMLCanvasElement = document.createElement("canvas");
   private glow: HTMLCanvasElement = makeGlow();
   private buckets: Int32Array[] = [];
@@ -44,34 +43,68 @@ export class Renderer {
     this.resize();
   }
 
+  // The patch: a diamond centred at (cx, cy), half as tall (B) as it is wide (A).
+  cx = 0;
+  cy = 0;
+  A = 0;
+  B = 0;
+
   resize(): void {
     this.dpr = Math.min(this.maxDpr, window.devicePixelRatio || 1);
     this.W = window.innerWidth;
     this.H = window.innerHeight;
-    this.horizon = this.H * (this.W < this.H ? 0.4 : 0.46);
+    this.A = Math.min(this.W * 0.42, this.H * 0.66);
+    this.B = this.A * (this.W < this.H ? 0.6 : 0.5);
+    this.cx = this.W / 2;
+    this.cy = this.H * 0.56;
     this.canvas.width = Math.round(this.W * this.dpr);
     this.canvas.height = Math.round(this.H * this.dpr);
     this.paintBackground();
   }
 
-  /** The scale everything is sized by: the height, unless the screen is very narrow. */
+  /** The scale strokes are sized by. */
   get size(): number {
-    return Math.min(this.H, this.W * 1.6);
+    return this.A * 1.3;
   }
 
-  // Where a stalk of depth t stands and how tall it is (for height factor 1).
+  // Where a stalk at x (left corner 0, right corner 1) and depth t (top corner 0, bottom 1) stands,
+  // and how tall it is (for height factor 1).
+  baseX(x: number): number {
+    return this.cx + (2 * x - 1) * this.A;
+  }
   baseY(t: number): number {
-    return this.horizon + (this.H * 1.03 - this.horizon) * t;
+    return this.cy + (2 * t - 1) * this.B;
   }
   stalkH(t: number): number {
-    return this.size * (0.012 + 0.21 * t);
+    return this.B * 0.34 * (0.88 + 0.24 * t);
   }
 
-  /** Screen point to field coordinates 0..1: the hand moves through the heads, about 3/4 up the stalks. */
-  toField(sx: number, sy: number): { x: number; t: number } {
-    const a = this.baseY(0) - 0.75 * this.stalkH(0);
-    const b = this.baseY(1) - 0.75 * this.stalkH(1);
-    return { x: sx / this.W, t: (sy - a) / (b - a) };
+  /** Screen point to the patch (u, v), 0..1 inside: the hand moves through the heads, 3/4 up the stalks. */
+  toField(sx: number, sy: number): { u: number; v: number } {
+    const a = (sx - this.cx) / this.A; // u − v
+    const b = (sy + 0.75 * this.stalkH(0.5) - (this.cy - this.B)) / this.B; // u + v
+    return { u: (a + b) / 2, v: (b - a) / 2 };
+  }
+
+  /** The patch outline, a little uneven like ploughed ground, corners top, right, bottom, left. */
+  private outline(dy = 0): [number, number][] {
+    const corners: [number, number][] = [
+      [this.cx, this.cy - this.B],
+      [this.cx + this.A, this.cy],
+      [this.cx, this.cy + this.B],
+      [this.cx - this.A, this.cy],
+    ];
+    const pts: [number, number][] = [];
+    for (let e = 0; e < 4; e++) {
+      const [x0, y0] = corners[e], [x1, y1] = corners[(e + 1) % 4];
+      const nx = y1 - y0, ny = x0 - x1, len = Math.hypot(nx, ny);
+      for (let k = 0; k < 24; k++) {
+        const s = k / 24;
+        const wob = Math.sin(s * Math.PI) * (Math.sin(s * 9 + e * 2.1) * 0.6 + Math.sin(s * 23 + e) * 0.4) * this.B * 0.035;
+        pts.push([x0 + (x1 - x0) * s + (nx / len) * wob, y0 + (y1 - y0) * s + (ny / len) * wob + dy]);
+      }
+    }
+    return pts;
   }
 
   setStalks(s: Stalks): void {
@@ -79,7 +112,7 @@ export class Renderer {
     const lists: number[][] = Array.from({ length: SLICES * LIGHTS }, () => []);
     for (let i = 0; i < s.n; i++) {
       const slice = Math.min(SLICES - 1, Math.floor(s.t[i] * SLICES));
-      const d = Math.abs(s.x[i] - SUN_X);
+      const d = Math.abs(this.baseX(s.x[i]) / this.W - SUN_X);
       const light = d < 0.1 ? 0 : d < 0.26 ? 1 : 2;
       lists[slice * LIGHTS + light].push(i);
     }
@@ -87,23 +120,28 @@ export class Renderer {
   }
 
   private paintBackground(): void {
-    const { W, H, horizon, dpr } = this;
+    const { W, H, dpr } = this;
     const c = this.bg;
     c.width = Math.round(W * dpr);
     c.height = Math.round(H * dpr);
     const g = c.getContext("2d")!;
     g.setTransform(dpr, 0, 0, dpr, 0, 0);
 
-    const sky = g.createLinearGradient(0, 0, 0, horizon);
+    // Sky all round: dusk above, the glow at the sun's height, dusk again below the patch.
+    const sunY = H * 0.36;
+    const sky = g.createLinearGradient(0, 0, 0, H);
     sky.addColorStop(0, "#241a42");
-    sky.addColorStop(0.3, "#563063");
-    sky.addColorStop(0.58, "#a8506a");
-    sky.addColorStop(0.82, "#e88a5a");
-    sky.addColorStop(1, "#ffcf86");
+    sky.addColorStop(0.16, "#563063");
+    sky.addColorStop(0.28, "#a8506a");
+    sky.addColorStop(0.4, "#f2a062");
+    sky.addColorStop(0.47, "#f6b877");
+    sky.addColorStop(0.62, "#c06a62");
+    sky.addColorStop(0.82, "#6a3a5a");
+    sky.addColorStop(1, "#2e1d3c");
     g.fillStyle = sky;
-    g.fillRect(0, 0, W, horizon + 1);
+    g.fillRect(0, 0, W, H);
 
-    const sx = W * SUN_X, sy = horizon - this.size * 0.035, r = this.size * 0.085;
+    const sx = W * SUN_X, sy = sunY, r = H * 0.075;
     const halo = g.createRadialGradient(sx, sy, r * 0.5, sx, sy, H * 0.7);
     halo.addColorStop(0, "rgba(255,214,140,0.55)");
     halo.addColorStop(0.25, "rgba(255,170,110,0.22)");
@@ -119,20 +157,38 @@ export class Renderer {
     g.arc(sx, sy, r, 0, Math.PI * 2);
     g.fill();
 
-    const ground = g.createLinearGradient(0, horizon, 0, H);
-    ground.addColorStop(0, "#d29a66");
-    ground.addColorStop(0.18, "#a86a38");
-    ground.addColorStop(0.6, "#6a3d1c");
-    ground.addColorStop(1, "#3a2010");
-    g.fillStyle = ground;
-    g.fillRect(0, horizon, W, H - horizon);
-
-    const haze = g.createLinearGradient(0, horizon - H * 0.06, 0, horizon + H * 0.14);
-    haze.addColorStop(0, "rgba(255,206,160,0)");
-    haze.addColorStop(0.35, "rgba(255,206,160,0.45)");
-    haze.addColorStop(1, "rgba(255,206,160,0)");
-    g.fillStyle = haze;
-    g.fillRect(0, horizon - H * 0.06, W, H * 0.2);
+    // The patch: a slab of earth (its side first), then the ground it grows from.
+    const depth = this.B * 0.13;
+    const trace = (pts: [number, number][]) => {
+      g.beginPath();
+      pts.forEach(([px, py], k) => (k ? g.lineTo(px, py) : g.moveTo(px, py)));
+      g.closePath();
+    };
+    const top = this.outline();
+    const low = this.outline(depth);
+    // The side: the lower half of the rim (right corner, bottom, left corner) and its copy below.
+    const q = top.length / 4;
+    const front = top.slice(q, 3 * q + 1);
+    const side = [...front, ...low.slice(q, 3 * q + 1).reverse()];
+    trace(side);
+    const sideFill = g.createLinearGradient(0, this.cy, 0, this.cy + this.B + depth);
+    sideFill.addColorStop(0, "#4a2a1c");
+    sideFill.addColorStop(1, "#22130f");
+    g.fillStyle = sideFill;
+    g.fill();
+    trace(top);
+    const earth = g.createLinearGradient(0, this.cy - this.B, 0, this.cy + this.B);
+    earth.addColorStop(0, "#b77a48");
+    earth.addColorStop(0.5, "#8a5228");
+    earth.addColorStop(1, "#5e3418");
+    g.fillStyle = earth;
+    g.fill();
+    // Back-light along the far edges, toward the sun.
+    g.strokeStyle = "rgba(255,214,150,0.35)";
+    g.lineWidth = 1.5;
+    g.beginPath();
+    [...top.slice(3 * q), ...top.slice(0, q + 1)].forEach(([px, py], k) => (k ? g.lineTo(px, py) : g.moveTo(px, py)));
+    g.stroke();
   }
 
   draw(trail: TrailPoint[], motes: Motes, now: number, hint: number): void {
@@ -149,10 +205,10 @@ export class Renderer {
     const frac = s.activeFrac;
     for (let slice = 0; slice < SLICES; slice++) {
       const tm = (slice + 0.5) / SLICES;
-      const near = smooth(Math.min(1, tm * 1.6));
+      const near = smooth(0.55 + 0.45 * tm);
       const stemBase = mix(HAZE, STEM_NEAR, near);
       const headBase = mix(HAZE, HEAD_NEAR, Math.min(1, near * 1.2));
-      const stemW = (0.45 + 2.0 * tm) * sizeK * 1.4;
+      const stemW = (0.7 + 0.9 * tm) * sizeK;
       const headW = stemW * 1.75 + 0.4;
       for (let light = 0; light < LIGHTS; light++) {
         const list = this.buckets[slice * LIGHTS + light];
@@ -163,7 +219,7 @@ export class Renderer {
         for (let k = 0; k < list.length; k++) {
           const i = list[k];
           if (rank[i] >= frac) continue;
-          const bx = x[i] * W, by = this.baseY(t[i]), h = this.stalkH(t[i]) * height[i];
+          const bx = this.baseX(x[i]), by = this.baseY(t[i]), h = this.stalkH(t[i]) * height[i];
           const a = ang[i];
           g.moveTo(bx, by);
           g.quadraticCurveTo(bx + Math.sin(a * 0.5) * h * 0.55, by - Math.cos(a * 0.5) * h * 0.55, bx + Math.sin(a) * h, by - Math.cos(a) * h);
@@ -176,7 +232,7 @@ export class Renderer {
         for (let k = 0; k < list.length; k++) {
           const i = list[k];
           if (rank[i] >= frac) continue;
-          const bx = x[i] * W, by = this.baseY(t[i]), h = this.stalkH(t[i]) * height[i];
+          const bx = this.baseX(x[i]), by = this.baseY(t[i]), h = this.stalkH(t[i]) * height[i];
           const a = ang[i];
           const cx = bx + Math.sin(a * 0.5) * h * 0.55, cy = by - Math.cos(a * 0.5) * h * 0.55;
           const tx = bx + Math.sin(a) * h, ty = by - Math.cos(a) * h;
@@ -196,7 +252,7 @@ export class Renderer {
     for (let i = 0; i < s.n; i++) {
       const v = glint[i];
       if (v < 0.02 || rank[i] >= frac) continue;
-      const bx = x[i] * W, by = this.baseY(t[i]), h = this.stalkH(t[i]) * height[i];
+      const bx = this.baseX(x[i]), by = this.baseY(t[i]), h = this.stalkH(t[i]) * height[i];
       const r = (3 + 11 * t[i]) * sizeK * (0.6 + 0.4 * v);
       g.globalAlpha = v * v * (0.35 + 0.4 * t[i]);
       g.drawImage(this.glow, bx + Math.sin(ang[i]) * h - r, by - Math.cos(ang[i]) * h - r, 2 * r, 2 * r);
@@ -229,7 +285,7 @@ export class Renderer {
       g.fillStyle = `rgba(255,240,215,${hint})`;
       g.shadowColor = "rgba(60,20,30,0.6)";
       g.shadowBlur = 12;
-      g.fillText("touch the field", W / 2, this.horizon + (H - this.horizon) * 0.42);
+      g.fillText("touch the field", W / 2, H * 0.07);
       g.shadowBlur = 0;
     }
   }

@@ -57,22 +57,27 @@ interface Segment {
 }
 const segments: Segment[] = [];
 const trail: TrailPoint[] = [];
-const hands = new Map<number, { x: number; t: number; time: number }>();
+const hands = new Map<number, { u: number; v: number; time: number }>();
 let hintFade = 0; // grows once audio is unlocked
 
-function toGrid(f: { x: number; t: number }): [number, number] {
-  return [f.x * (GRID_W - 1), Math.min(GRID_H - 1.5, Math.max(0.5, f.t * (GRID_H - 1)))];
+function toGrid(f: { u: number; v: number }): [number, number] {
+  return [f.u * (GRID_W - 1), f.v * (GRID_H - 1)];
+}
+
+/** Is the hand over the patch (with a little margin, so strokes reach the edge rows)? */
+function onPatch(f: { u: number; v: number }): boolean {
+  return f.u > -0.06 && f.u < 1.06 && f.v > -0.06 && f.v < 1.06;
 }
 
 function moveHand(id: number, sx: number, sy: number, timeMs: number): void {
   const f = renderer.toField(sx, sy);
   const time = timeMs / 1000;
   const last = hands.get(id);
-  if (last && f.t > -0.08 && last.t > -0.08) {
+  if (last && onPatch(f) && onPatch(last)) {
     const [x0, y0] = toGrid(last), [x1, y1] = toGrid(f);
     segments.push({ x0, y0, x1, y1, seconds: Math.max(1 / 240, time - last.time) });
   }
-  hands.set(id, { x: f.x, t: f.t, time });
+  hands.set(id, { u: f.u, v: f.v, time });
   trail.push({ x: sx, y: sy, time: performance.now() / 1000 });
   if (trail.length > 400) trail.splice(0, trail.length - 400);
 }
@@ -109,7 +114,8 @@ canvas.addEventListener("pointerleave", lift);
 const demo = query.get("demo");
 function startDemo(): void {
   gusts.trigger(simTime);
-  segments.push({ x0: 15, y0: GRID_H * 0.75, x1: 145, y1: GRID_H * 0.65, seconds: 0.35 });
+  // Left corner to right corner, across the middle of the patch.
+  segments.push({ x0: GRID_W * 0.12, y0: GRID_H * 0.92, x1: GRID_W * 0.95, y1: GRID_H * 0.15, seconds: 0.35 });
   for (let k = Math.round(Number(demo) * SIM_HZ) || 0; k > 0; k--) simStep();
 }
 if (query.has("debug")) debug.toggle();

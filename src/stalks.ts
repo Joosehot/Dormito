@@ -1,5 +1,7 @@
-﻿// The wheat: stalks placed in perspective (far ones small and dense), each a damped spring
-// driven by the field under it. A stalk chimes when its bend rises through the threshold.
+﻿// The wheat: stalks spread evenly over a square patch of ground, each a damped spring driven by the
+// field under it. A stalk chimes when its bend rises through the threshold.
+// The patch is seen as a diamond: corner (u, v) = (0, 0) at the top, (1, 0) right, (0, 1) left,
+// (1, 1) bottom; so across the screen x = (u − v + 1) / 2 and depth t = (u + v) / 2.
 
 import { Field } from "./field.ts";
 import { mulberry32, subSeed, Noise1 } from "./rng.ts";
@@ -15,9 +17,12 @@ export type Fire = (i: number, intensity: number) => void;
 
 export class Stalks {
   readonly n: number;
-  /** 0..1 across the screen. */
+  /** Place on the patch, 0..1 each. */
+  readonly u: Float32Array;
+  readonly v: Float32Array;
+  /** 0..1 across the screen (left corner to right corner). */
   readonly x: Float32Array;
-  /** Depth 0 (horizon) .. 1 (nearest), sorted ascending so drawing in index order is back to front. */
+  /** Depth 0 (top corner) .. 1 (bottom corner), sorted ascending so index order is back to front. */
   readonly t: Float32Array;
   readonly height: Float32Array; // relative to the near height
   readonly lean: Float32Array; // resting bend
@@ -39,10 +44,10 @@ export class Stalks {
     const n = (this.n = count);
     const items: number[][] = [];
     for (let i = 0; i < n; i++) {
-      const t = Math.pow(rng(), 1.55); // denser toward the horizon
+      const u = 0.02 + 0.96 * rng(), v = 0.02 + 0.96 * rng();
       items.push([
-        -0.03 + 1.06 * rng(),
-        t,
+        (u - v + 1) / 2,
+        (u + v) / 2,
         0.8 + 0.4 * rng(),
         (rng() - 0.5) * 0.12 + 0.04,
         2 * Math.PI * (1.9 + 1.2 * rng()),
@@ -50,10 +55,14 @@ export class Stalks {
         rng() * 2 - 1,
         (rng() * 2 - 1) * 3,
         rng(),
+        u,
+        v,
       ]);
     }
     items.sort((a, b) => a[1] - b[1]);
     const col = (k: number) => Float32Array.from(items, (it) => it[k]);
+    this.u = col(9);
+    this.v = col(10);
     this.x = col(0);
     this.t = col(1);
     this.height = col(2);
@@ -72,16 +81,16 @@ export class Stalks {
   }
 
   step(dt: number, now: number, field: Field, p: StalkParams, fire: Fire): void {
-    const { x, t, lean, omega, zeta, ang, vel, glint, bendPrev, cool, rank, noise } = this;
+    const { u, v, x, t, lean, omega, zeta, ang, vel, glint, bendPrev, cool, rank, noise } = this;
     const gw = field.w - 1, gh = field.h - 1;
     const thr = p.threshold;
     const fade = dt / 0.3;
     for (let i = 0; i < this.n; i++) {
       if (glint[i] > 0) glint[i] = Math.max(0, glint[i] - fade);
       if (rank[i] >= this.activeFrac) continue;
-      const u = field.sample(x[i] * gw, t[i] * gh);
+      const push = field.sample(u[i] * gw, v[i] * gh);
       const breeze = p.breeze * noise.at(x[i] * 5 + t[i] * 3 + now * 0.35);
-      const target = lean[i] + p.fieldGain * u + breeze;
+      const target = lean[i] + p.fieldGain * push + breeze;
       const w0 = omega[i];
       vel[i] += (w0 * w0 * (target - ang[i]) - 2 * zeta[i] * w0 * vel[i]) * dt;
       ang[i] += vel[i] * dt;

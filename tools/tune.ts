@@ -79,8 +79,9 @@ function run(name: string, seconds: number, strokes: Stroke[], gustAt: number | 
   if (played.length) console.log(`           ${firstNotes}${played.length > 14 ? " ..." : ""}`);
 }
 
-const midY = GRID_H * 0.6;
+// Strokes in grid cells; the patch is GRID_W × GRID_H, seen as a diamond.
+const [W, H] = [GRID_W, GRID_H];
 run("idle", 12, [], null);
-run("slow", 6, [{ from: [50, midY], to: [80, midY], start: 0.2, dur: 2.5 }], null);
-run("fast", 6, [{ from: [12, midY], to: [148, midY - 6], start: 0.2, dur: 0.35 }], null);
+run("slow", 6, [{ from: [W * 0.35, H * 0.6], to: [W * 0.55, H * 0.45], start: 0.2, dur: 2.5 }], null);
+run("fast", 6, [{ from: [W * 0.12, H * 0.92], to: [W * 0.95, H * 0.15], start: 0.2, dur: 0.35 }], null);
 run("gust", 9, [], 0.2);
