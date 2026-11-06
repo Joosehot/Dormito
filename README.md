@@ -1,5 +1,7 @@
 # Dormito
 
+![Dormito: a diamond-shaped patch of golden wheat in a sunset sky, a line of glints where a swipe made the stalks ring](docs/dormito.png)
+
 A small square patch of golden wheat, seen as a diamond floating in a sunset sky. Brush a hand through the wheat and the stalks ring with soft little
 chimes; each brush sends a wave rolling out through the field, and every so often a gust sweeps the
 whole meadow at once.
