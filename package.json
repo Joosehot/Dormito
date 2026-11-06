@@ -1,0 +1,18 @@
+{
+  "name": "dormito",
+  "version": "0.1.0",
+  "description": "A golden wheat field at sunset that rings when you brush through it",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview",
+    "tune": "node tools/tune.ts"
+  },
+  "license": "MIT",
+  "devDependencies": {
+    "typescript": "^5.9.3",
+    "vite": "^6.4.5"
+  }
+}

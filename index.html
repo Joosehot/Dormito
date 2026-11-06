@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+  <title>Dormito</title>
+  <style>
+    html, body { margin: 0; height: 100%; background: #1d1430; overflow: hidden; }
+    canvas { display: block; width: 100vw; height: 100vh; touch-action: none; cursor: crosshair; }
+    #debug {
+      position: fixed; top: 10px; right: 10px; width: 270px; max-height: calc(100vh - 20px); overflow-y: auto;
+      background: rgba(20, 12, 30, 0.82); color: #f3e2c4; font: 12px/1.35 ui-monospace, Consolas, monospace;
+      padding: 10px 12px; border-radius: 8px; display: none; z-index: 2;
+    }
+    #debug.open { display: block; }
+    #debug label { display: block; margin-top: 6px; }
+    #debug input[type=range] { width: 100%; accent-color: #e9b45c; }
+    #debug .row { display: flex; gap: 6px; margin-top: 8px; }
+    #debug button, #debug select, #debug input[type=number] {
+      background: #3a2a44; color: #f3e2c4; border: 1px solid #6b5270; border-radius: 4px; font: inherit; padding: 3px 6px;
+    }
+    #debug .stats { margin-top: 8px; color: #ffd98f; white-space: pre; }
+  </style>
+</head>
+<body>
+  <canvas id="field"></canvas>
+  <div id="debug"></div>
+  <script type="module" src="./src/main.ts"></script>
+</body>
+</html>
