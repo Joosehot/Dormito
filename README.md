@@ -26,7 +26,8 @@ npm run tune       # the simulation without a browser: idle, slow brush, fast sw
 - **Stalks** (`src/stalks.ts`): 2600 damped springs (2000 on phones) spread evenly over the patch, driven by
   the field under them, with a slow breeze that never rings anything.
 - **Chimes** (`src/chimes.ts`, `src/scale.ts`): a stalk rings when its bend rises through the
-  threshold, at most once per 0.4 s. x (left corner to right corner) walks up two octaves of the scale; the near half of the\n  patch is an octave higher, louder and brighter, the far half softer, duller and wetter. Chimes on the
+  threshold, at most once per 0.4 s. x (left corner to right corner) walks up two octaves of the scale; the near half of the
+  patch is an octave higher, louder and brighter, the far half softer, duller and wetter. Chimes on the
   same pitch within 30 ms merge into one slightly louder chime; at most 6 new ones start per frame.
 - **Sound** (`src/audio.ts`): each chime is a sine plus partials at 2.76 and 5.40, with a 2–5 ms
   attack and a 0.6–1.5 s decay (higher notes shorter), ±3 cents detune, a lowpass and a pan from x.
